@@ -4,6 +4,9 @@ namespace App\Controller;
 
 use App\Entity\User;
 use App\Repository\UserRepository;
+use http\Exception\UnexpectedValueException;
+use HttpInvalidParamException;
+use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -28,9 +31,6 @@ class UserController extends AbstractController
         $users=$userRepository->findAll();
 
         foreach ($users as $user) {
-            /**
-             * `user_id`, `full_name`, `user_name`, `password`, `email`, `mobile`
-             */
 
             $data[] = [
                 'user_id'=>$user->getId(),
@@ -54,7 +54,7 @@ class UserController extends AbstractController
     public function add(Request $request,UserRepository $userRepository): JsonResponse
     {
 
-        $full_name = $request->get('full_name');
+        $full_name = trim($request->get('full_name'));
         $user_name = $request->get('user_name');
         $password = $request->get('password');
         $email = $request->get('email');
@@ -62,13 +62,54 @@ class UserController extends AbstractController
 
         if (empty($full_name) || empty($user_name) || empty($password) || empty($email)) {
 
-            throw new NotFoundHttpException('Invalid Inputs!');
+            $error=['success'=>false,
+                'data'=>null,
+                'msg_title'=>"Invalid Parameters",
+                'msg_body'=>"The parameters is not valid."];
+
+            return new JsonResponse($error, Response::HTTP_BAD_REQUEST);
+        }
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+
+            $error=['success'=>false,
+                    'data'=>null,
+                    'msg_title'=>"Invalid Email Format",
+                    'msg_body'=>"The Email address format is not valid!"];
+
+            return new JsonResponse($error, Response::HTTP_BAD_REQUEST);
+        }
+
+        if(!$this->isValidUserName($user_name)){
+
+            $error=['success'=>false,
+                'data'=>null,
+                'msg_title'=>"Invalid Username!",
+                'msg_body'=>"The username you have entered is not valid!"];
+
+            return new JsonResponse($error, Response::HTTP_BAD_REQUEST);
         }
 
         if($userRepository->findOneBy(["user_name"=>$user_name])!=null) {
 
-            throw new NotFoundHttpException('User already exists!');
+            $error=['success'=>false,
+                'data'=>null,
+                'msg_title'=>"User already exists!",
+                'msg_body'=>"The username you have entered is already exists!"];
+
+            return new JsonResponse($error, Response::HTTP_BAD_REQUEST);
         }
+
+        if($userRepository->findOneBy(["email"=>$email])!=null) {
+
+            $error=['success'=>false,
+                'data'=>null,
+                'msg_title'=>"User Email Already Exists!",
+                'msg_body'=>"The email you have entered is already exists!"];
+
+            return new JsonResponse($error, Response::HTTP_BAD_REQUEST);
+        }
+
 
         $user= new User();
 
@@ -84,9 +125,22 @@ class UserController extends AbstractController
 
         //$this->customerRepository->saveCustomer($firstName, $lastName, $email, $phoneNumber);
 
-        return new JsonResponse(['status' => 'User created!'], Response::HTTP_CREATED);
+        $response_msg=['success'=>true,
+            'data'=>null,
+            'msg_title'=>"User Created Successfully",
+            'msg_body'=>"User has been created successfully."];
+
+        return new JsonResponse($response_msg, Response::HTTP_CREATED);
     }
 
+    private function isValidUserName($user_name): bool
+    {
+
+        if(is_numeric($user_name)) return false;
+        if (substr_count($user_name, ' ')>0)  return false;
+
+        return true;
+    }
 
     /**
      * @Route("/{id}", name="user_show", methods={"GET"})
@@ -109,9 +163,10 @@ class UserController extends AbstractController
      * @Route("/{id}", name="post_edit", methods={"PUT"})
      * @param Request $request
      * @param User $user
+     * @param UserRepository $userRepository
      * @return JsonResponse
      */
-    public function edit(Request $request, User $user): JsonResponse
+    public function edit(Request $request, User $user, UserRepository $userRepository): JsonResponse
     {
         $full_name = $request->get('full_name');
         $user_name = $request->get('user_name');
@@ -119,8 +174,54 @@ class UserController extends AbstractController
         $email = $request->get('email');
         $mobile = $request->get('mobile');
 
-        if (empty($user_id) || empty($full_name) || empty($user_name) || empty($password) || empty($email)) {
-            throw new NotFoundHttpException('Invalid user attributes!');
+        if (empty($full_name) || empty($user_name) || empty($password) || empty($email)) {
+
+            $error=['success'=>false,
+                'data'=>null,
+                'msg_title'=>"Invalid Parameters",
+                'msg_body'=>"The parameters is not valid."];
+
+            return new JsonResponse($error, Response::HTTP_BAD_REQUEST);
+        }
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+
+            $error=['success'=>false,
+                'data'=>null,
+                'msg_title'=>"Invalid Email Format",
+                'msg_body'=>"The Email address format is not valid!"];
+
+            return new JsonResponse($error, Response::HTTP_BAD_REQUEST);
+        }
+
+        if(!$this->isValidUserName($user_name)){
+
+            $error=['success'=>false,
+                'data'=>null,
+                'msg_title'=>"Invalid Username!",
+                'msg_body'=>"The username you have entered is not valid!"];
+
+            return new JsonResponse($error, Response::HTTP_BAD_REQUEST);
+        }
+
+        if($userRepository->findUserNameBy($user->getId(),$user_name)!=null) {
+
+            $error=['success'=>false,
+                'data'=>null,
+                'msg_title'=>"User already exists!",
+                'msg_body'=>"The username you have entered is already exists!"];
+
+            return new JsonResponse($error, Response::HTTP_BAD_REQUEST);
+        }
+
+        if($userRepository->findUserEmailBy($user->getId(),$email)!=null) {
+
+            $error=['success'=>false,
+                'data'=>null,
+                'msg_title'=>"User Email Already Exists!",
+                'msg_body'=>"The email you have entered is already exists!"];
+
+            return new JsonResponse($error, Response::HTTP_BAD_REQUEST);
         }
 
         $user->setFullName($full_name);
@@ -133,7 +234,13 @@ class UserController extends AbstractController
         $entityManager->persist($user);
         $entityManager->flush();
 
-        return new JsonResponse(['status' => 'User edited!'], Response::HTTP_OK);
+        //return new JsonResponse(['status' => 'User edited!'], Response::HTTP_OK);
+        $response_msg=['success'=>true,
+            'data'=>null,
+            'msg_title'=>"Edited Successfully",
+            'msg_body'=>"User has been changed successfully."];
+
+        return new JsonResponse($response_msg, Response::HTTP_OK);//HTTP_CREATED
     }
 
     /**
@@ -148,6 +255,11 @@ class UserController extends AbstractController
         $entityManager->remove($user);
         $entityManager->flush();
 
-        return new JsonResponse(['status' => 'User deleted!'], Response::HTTP_OK);
+        $response_msg=['success'=>true,
+            'data'=>null,
+            'msg_title'=>"Deleted Successfully",
+            'msg_body'=>"User has been deleted successfully."];
+
+        return new JsonResponse($response_msg, Response::HTTP_OK);//HTTP_CREATED
     }
 }
