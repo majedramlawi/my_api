@@ -50,7 +50,7 @@ class User
     private $mobile;
 
     /**
-     * @ORM\OneToMany(targetEntity=Post::class, mappedBy="user", orphanRemoval=true)
+     * @ORM\OneToMany(targetEntity=Post::class, mappedBy="user", orphanRemoval=true, fetch="EAGER")
      */
     private $posts;
 
